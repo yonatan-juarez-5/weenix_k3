@@ -566,7 +566,7 @@ int
 vmmap_is_range_empty(vmmap_t *map, uint32_t startvfn, uint32_t npages)
 {
         vmarea_t *vm = NULL;
-        unsigned int pages = startvfn + npages, endvn = startvfn + npages;
+        unsigned int pages = startvfn + npages, endvfn = startvfn + npages;
 
         /* the specified page range must not be empty and lie completely within the user space */
         KASSERT((startvfn < endvfn) && (ADDR_TO_PN(USER_MEM_LOW) <= startvfn) && (ADDR_TO_PN(USER_MEM_HIGH) >= endvfn));
