@@ -70,15 +70,59 @@ void
 handle_pagefault(uintptr_t vaddr, uint32_t cause)
 {
         // (let pf be the page frame located by the page fault handler)
+        uint32_t pn = ADDR_TO_PN(vaddr);
+        uint32_t pt = PT_PRESENT | PT_USER;
+        uint32_t pd = PD_PRESENT | PD_USER;
 
+        vmarea_t *fault = vmmap_lookup(curproc->p_vmmap, pn);
+        
+        if (fault == NULL){
+                dbg(DBG_PRINT, "(GRADING3A 5)\n");
+                do_exit(EFAULT);
+        }
+        if((cause & FAULT_WRITE) && !(fault->vma_prot & PROT_WRITE)){
+                dbg(DBG_PRINT, "(GRADING3A 5)\n");
+                do_exit(EFAULT);
+        }
+        if (!(cause & FAULT_WRITE || cause & FAULT_EXEC) && !(fault->vma_prot & PROT_READ)){
+                dbg(DBG_PRINT, "(GRADING3A 5)\n");
+                do_exit(EFAULT);
+        }
 
+        pframe_t *pf = NULL;
+        int fw = 0;
 
-        /* this page frame must be non-NULL */
-        KASSERT(pf); 
-        dbg(DBG_PRINT, "(GRADING3A 5.a)\n");
-        /* this page frame's pf_addr must be non-NULL */
-        KASSERT(pf->pf_addr); 
-        dbg(DBG_PRINT, "(GRADING3A 5.a)\n");
+        if (cause & FAULT_WRITE){
+                dbg(DBG_PRINT, "(GRADING3A 5)\n");
+                fw = 1;
+                pt = pt | PT_WRITE;
+                pd = pd | PD_WRITE;
+        }
+        if (pframe_lookup(fault->vma_obj, pn-fault->vma_start + fault->vma_off, fw, &pf) != 0){
+                dbg(DBG_PRINT, "(GRADING3A 5)\n");
+                do_exit(EFAULT);
+        }
+        else{
+                /* this page frame must be non-NULL */
+                KASSERT(pf); 
+                dbg(DBG_PRINT, "(GRADING3A 5.a)\n");
+                /* this page frame's pf_addr must be non-NULL */
+                KASSERT(pf->pf_addr); 
+                dbg(DBG_PRINT, "(GRADING3A 5.a)\n");
+
+                if (fw == 1){
+                        dbg(DBG_PRINT, "(GRADING3A 5)\n");
+                        pframe_pin(pf);
+                        pframe_dirty(pf);
+                        pframe_unpin(pf);
+                }
+                dbg(DBG_PRINT, "(GRADING3A 5)\n");
+                uintptr_t paddr = (uintptr_t)pt_virt_to_phys((uintptr_t)pf->pf_addr);
+                int res = pt_map(curproc->p_pagedir, (uintptr_t)PAGE_ALIGN_DOWN(vaddr), paddr, pd, pt);
+
+                tlb_flush((uintptr_t)PAGE_ALIGN_DOWN(vaddr));
+        }
+        dbg(DBG_PRINT, "(GRADING3A 5)\n");
 
         // NOT_YET_IMPLEMENTED("VM: handle_pagefault");
 }

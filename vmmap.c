@@ -211,7 +211,64 @@ vmmap_insert(vmmap_t *map, vmarea_t *newvma)
 int
 vmmap_find_range(vmmap_t *map, uint32_t npages, int dir)
 {
-        
+        vmarea_t *vma = NULL;
+        vmarea_t *curr = NULL;
+        int res = -1;
+        if (dir == VMMAP_DIR_HILO){
+                list_iterate_reverse(&map->vmm_list, vma, vmarea_t, vma_plink){
+                        if (curr == NULL && npages <= ADDR_TO_PN(USER_MEM_HIGH) - vma->vma_end){
+                                res = ADDR_TO_PN(USER_MEM_HIGH) - npages;
+                                dbg(DBG_PRINT, "(GRADING3A)\n");
+                                break;
+                        }
+                        else if(curr != NULL && npages <= (curr->vma_start - vma->vma_end)){
+                                res = curr->vma_start - npages;
+                                dbg(DBG_PRINT, "(GRADING3A)\n");
+                                break;
+                        }
+                        else{
+                                curr = vma;
+                                dbg(DBG_PRINT, "(GRADING3A)\n");
+                        }
+                } list_iterate_end();
+                if (res < 0 && npages  <= (curr->vma_start - ADDR_TO_PN(USER_MEM_LOW))){
+                        res = curr->vma_start - npages;
+                        dbg(DBG_PRINT, "(GRADING3A)\n");
+                }
+                dbg(DBG_PRINT, "(GRADING3A)\n");
+        }
+        else if (dir == VMMAP_DIR_LOHI){
+                list_iterate_begin(&map->vmm_list, vma, vmarea_t, vma_plink){
+                        if (curr == NULL && npages <= (vma->vma_start - ADDR_TO_PN(USER_MEM_LOW))){
+                                res = ADDR_TO_PN(USER_MEM_LOW);
+                                dbg(DBG_PRINT, "(GRADING3A)\n");
+                                break;
+                        }
+                        else if (curr != NULL && npages <= (vma->vma_start - curr->vma_end)){
+                                res = curr->vma_end;
+                                dbg(DBG_PRINT, "(GRADING3A)\n");
+                        }
+                        else{
+                                curr = vma;
+                                dbg(DBG_PRINT, "(GRADING3A)\n");
+                        }
+                        dbg(DBG_PRINT, "(GRADING3A)\n");
+                }list_iterate_end();
+
+                if (res < 0){
+                        if (curr == NULL && npages <= (ADDR_TO_PN(USER_MEM_HIGH) - ADDR_TO_PN(USER_MEM_LOW))){
+                                res = ADDR_TO_PN(USER_MEM_LOW);
+                                dbg(DBG_PRINT, "(GRADING3A)\n");
+                        }
+                        else if (npages <= (ADDR_TO_PN(USER_MEM_HIGH) - curr->vma_end)){
+                                res = curr->vma_end;
+                                dbg(DBG_PRINT, "(GRADING3A)\n");
+                        }
+                }
+                dbg(DBG_PRINT, "(GRADING3A)\n");
+        }
+        dbg(DBG_PRINT, "(GRADING3A)\n");
+        return res;
         // NOT_YET_IMPLEMENTED("VM: vmmap_find_range");
         // return -1;
 }
@@ -548,8 +605,49 @@ vmmap_is_range_empty(vmmap_t *map, uint32_t startvfn, uint32_t npages)
 int
 vmmap_read(vmmap_t *map, const void *vaddr, void *buf, size_t count)
 {
-        NOT_YET_IMPLEMENTED("VM: vmmap_read");
+        dbg(DBG_PRINT, "(GRADING3A)\n");
+        if (ADDR_TO_PN(vaddr) == ADDR_TO_PN((int)vaddr+count)){
+                vmarea_t *vma = vmmap_lookup(map, ADDR_TO_PN(vaddr));
+                pframe_t *pf = NULL;
+
+                int res = pframe_lookup(vma->vma_obj, (ADDR_TO_PN(vaddr) - vma->vma_start + vma->vma_off), 1, &pf);
+                memcpy(buf, ((char*)pf->pf_addr) + PAGE_OFFSET(vaddr), count);
+                dbg(DBG_PRINT, "(GRADING3A)\n");
+                return 0; 
+        }
+        unsigned int curr = ADDR_TO_PN(vaddr);
+        int res = 0;
+        if (curr <= ADDR_TO_PN((int)vaddr + count)){
+                vmarea_t *vma = vmmap_lookup(map, curr);
+                pframe_t *pf = NULL;
+
+                res = pframe_lookup(vma->vma_obj, curr - vma->vma_start+vma->vma_off, 1, &pf);
+                memcpy(buf, ((char*)pf->pf_addr) + PAGE_OFFSET(vaddr), PAGE_SIZE - PAGE_OFFSET(vaddr));
+                buf = ((char*)buf + PAGE_SIZE - PAGE_OFFSET(vaddr));
+
+                curr += 1;
+                dbg(DBG_PRINT, "(GRADING3A)\n");
+        }
+        while(curr <= ADDR_TO_PN((int)vaddr + count)){
+                vmarea_t *vma = vmmap_lookup(map, curr);
+                pframe_t *pf = NULL;
+
+                res = pframe_lookup(vma->vma_obj, curr - vma->vma_start+vma->vma_off, 1, &pf);
+                memcpy(buf, pf->pf_addr, PAGE_OFFSET((int)vaddr + count));
+                buf = ((char*)buf + PAGE_SIZE - PAGE_OFFSET((int)vaddr + count));
+
+                curr += 1;
+                dbg(DBG_PRINT, "(GRADING3A)\n");
+        }
+
+        if (res == 0){
+                dbg(DBG_PRINT, "(GRADING3A)\n");
+                return res;
+        }
+        dbg(DBG_PRINT, "(GRADING3A)\n");
         return 0;
+        // NOT_YET_IMPLEMENTED("VM: vmmap_read");
+        // return 0;
 }
 
 /* Write from 'buf' into the virtual address space of 'map' starting at
@@ -563,6 +661,60 @@ vmmap_read(vmmap_t *map, const void *vaddr, void *buf, size_t count)
 int
 vmmap_write(vmmap_t *map, void *vaddr, const void *buf, size_t count)
 {
-        NOT_YET_IMPLEMENTED("VM: vmmap_write");
+        dbg(DBG_PRINT, "(GRADING3A)\n");
+        if(ADDR_TO_PN(vaddr)==ADDR_TO_PN((int)vaddr-1+count)){
+
+            vmarea_t* vma = vmmap_lookup(map, ADDR_TO_PN(vaddr));
+            pframe_t* pf = NULL;
+
+            int result = pframe_lookup(vma->vma_obj, ADDR_TO_PN(vaddr) - vma->vma_start + vma->vma_off, 1, &pf);
+            memcpy(((char*)pf->pf_addr) + PAGE_OFFSET(vaddr), buf, count);
+            pframe_dirty(pf);
+
+            dbg(DBG_PRINT, "(GRADING3A)\n");
+
+            return 0;
+        }
+
+        unsigned int curr = ADDR_TO_PN(vaddr);
+        int res = 0;
+
+        if(curr <= ADDR_TO_PN((int)vaddr-1+count)){
+            vmarea_t* vma = vmmap_lookup(map, curr);
+            pframe_t* pf = NULL;
+
+            res = pframe_lookup(vma->vma_obj, curr-vma->vma_start + vma->vma_off, 1, &pf);
+            memcpy(((char*)pf->pf_addr) + PAGE_OFFSET(vaddr), buf, PAGE_SIZE-PAGE_OFFSET(vaddr));
+            buf = ((char*)buf+PAGE_SIZE - PAGE_OFFSET(vaddr));
+
+            pframe_dirty(pf);
+            curr += 1;
+            dbg(DBG_PRINT, "(GRADING3A)\n");
+        }
+
+
+        while(curr <= ADDR_TO_PN((int)vaddr - 1 + count)){
+
+            vmarea_t* vma = vmmap_lookup(map, curr);
+            pframe_t* pf = NULL;
+
+            res = pframe_lookup(vma->vma_obj, curr - vma->vma_start + vma->vma_off, 1, &pf);
+            memcpy(pf->pf_addr, buf, PAGE_OFFSET((int)vaddr-1+count));
+            buf = ((char*)buf+PAGE_OFFSET((int)vaddr-1+count));
+
+            pframe_dirty(pf);
+            curr += 1;
+            dbg(DBG_PRINT, "(GRADING3A)\n");
+        }
+
+        if(res == 0){
+            dbg(DBG_PRINT, "(GRADING3A)\n");
+            return res;
+        }
+
+        dbg(DBG_PRINT, "(GRADING3A)\n");
+
         return 0;
+        // NOT_YET_IMPLEMENTED("VM: vmmap_write");
+        // return 0;
 }
